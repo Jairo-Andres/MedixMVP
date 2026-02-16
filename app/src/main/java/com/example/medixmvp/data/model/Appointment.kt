@@ -2,7 +2,9 @@ package com.example.medixmvp.data.model
 
 data class AppointmentSlot(
     val date: String,
-    val time: String
+    val time: String,
+    val doctorName: String,
+    val location: String
 )
 
 data class Appointment(

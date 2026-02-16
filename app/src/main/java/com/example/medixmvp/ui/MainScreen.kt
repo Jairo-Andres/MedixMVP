@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -45,10 +46,12 @@ fun MainScreen(
     state: MedixUiState,
     onRecognizedText: (String) -> Unit,
     onSpeak: (String) -> Unit,
-    onPatientIdChange: (String) -> Unit
+    onPatientIdChange: (String) -> Unit,
+    speechCompletionToken: Int
 ) {
     val context = LocalContext.current
     var permissionMessage by remember { mutableStateOf<String?>(null) }
+    var autoListenEnabled by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
 
     val speechLauncher = rememberLauncherForActivityResult(
@@ -60,7 +63,9 @@ fun MainScreen(
                 ?.firstOrNull()
                 .orEmpty()
             if (text.isNotBlank()) {
-                onRecognizedText(text)
+                if (!isLikelyAssistantEcho(text, state.responseText)) {
+                    onRecognizedText(text)
+                }
             }
         }
     }
@@ -70,8 +75,10 @@ fun MainScreen(
     ) { granted ->
         if (granted) {
             permissionMessage = null
+            autoListenEnabled = true
             launchSpeechRecognition(context, speechLauncher::launch)
         } else {
+            autoListenEnabled = false
             permissionMessage = "Necesito permiso de micrófono para escuchar su solicitud."
         }
     }
@@ -80,6 +87,24 @@ fun MainScreen(
         if (state.responseText.isNotBlank()) {
             onSpeak(state.responseText)
         }
+    }
+
+    LaunchedEffect(speechCompletionToken, autoListenEnabled) {
+        if (!autoListenEnabled || speechCompletionToken <= 0) return@LaunchedEffect
+
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!hasPermission) {
+            autoListenEnabled = false
+            permissionMessage = "Necesito permiso de micrófono para escuchar continuamente."
+            return@LaunchedEffect
+        }
+
+        delay(250)
+        launchSpeechRecognition(context, speechLauncher::launch)
     }
 
     Surface(modifier = Modifier.fillMaxSize()) {
@@ -122,6 +147,7 @@ fun MainScreen(
                     ) == PackageManager.PERMISSION_GRANTED
 
                     if (hasPermission) {
+                        autoListenEnabled = true
                         launchSpeechRecognition(context, speechLauncher::launch)
                     } else {
                         permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -131,7 +157,7 @@ fun MainScreen(
                     .fillMaxWidth()
                     .height(64.dp)
             ) {
-                Text(text = "🎙 Hablar", fontSize = 24.sp)
+                Text(text = if (autoListenEnabled) "🎙 Escuchando..." else "🎙 Hablar", fontSize = 24.sp)
             }
 
             permissionMessage?.let {
@@ -188,6 +214,19 @@ fun MainScreen(
             }
         }
     }
+}
+
+private fun isLikelyAssistantEcho(recognizedText: String, responseText: String): Boolean {
+    val normalizedRecognized = recognizedText
+        .lowercase()
+        .replace("[^a-z0-9áéíóúüñ ]".toRegex(), "")
+        .trim()
+    val normalizedResponse = responseText
+        .lowercase()
+        .replace("[^a-z0-9áéíóúüñ ]".toRegex(), "")
+        .trim()
+
+    return normalizedRecognized.isNotBlank() && normalizedRecognized == normalizedResponse
 }
 
 @Composable

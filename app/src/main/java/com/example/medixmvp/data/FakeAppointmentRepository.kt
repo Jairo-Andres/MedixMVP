@@ -5,10 +5,10 @@ import com.example.medixmvp.data.model.AppointmentSlot
 
 class FakeAppointmentRepository {
     private val availableSlots = mutableListOf(
-        AppointmentSlot("2026-02-20", "09:00"),
-        AppointmentSlot("2026-02-20", "11:30"),
-        AppointmentSlot("2026-02-21", "08:30"),
-        AppointmentSlot("2026-02-22", "15:00")
+        AppointmentSlot("2026-02-20", "09:00", "Dra. Ana López", "Sede Norte, consultorio 201"),
+        AppointmentSlot("2026-02-20", "11:30", "Dr. Carlos Méndez", "Sede Norte, consultorio 104"),
+        AppointmentSlot("2026-02-21", "08:30", "Dra. Juliana Ruiz", "Sede Centro, consultorio 305"),
+        AppointmentSlot("2026-02-22", "15:00", "Dr. Mateo Pérez", "Sede Sur, consultorio 18")
     )
 
     private val scheduledAppointments = mutableListOf<Appointment>()
@@ -33,6 +33,12 @@ class FakeAppointmentRepository {
         val nextSlot = availableSlots.firstOrNull() ?: return null
         pendingAction = PendingAction.Schedule(nextSlot)
         return nextSlot
+    }
+
+    fun requestScheduleForDate(date: String): AppointmentSlot? {
+        val requestedSlot = availableSlots.firstOrNull { it.date == date } ?: return null
+        pendingAction = PendingAction.Schedule(requestedSlot)
+        return requestedSlot
     }
 
     fun requestReschedule(): AppointmentSlot? {
