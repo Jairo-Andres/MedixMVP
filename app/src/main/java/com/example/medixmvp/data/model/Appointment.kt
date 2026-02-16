@@ -7,6 +7,7 @@ data class AppointmentSlot(
 
 data class Appointment(
     val id: Int,
+    val patientId: String,
     val slot: AppointmentSlot,
     val createdAt: Long = System.currentTimeMillis()
 )

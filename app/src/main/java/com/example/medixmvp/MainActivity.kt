@@ -30,7 +30,8 @@ class MainActivity : ComponentActivity() {
                 MainScreen(
                     state = uiState,
                     onRecognizedText = viewModel::onSpeechRecognized,
-                    onSpeak = voiceInteractor::speak
+                    onSpeak = voiceInteractor::speak,
+                    onPatientIdChange = viewModel::onPatientIdChange
                 )
             }
 
