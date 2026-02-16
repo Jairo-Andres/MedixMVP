@@ -2,6 +2,7 @@ package com.medix.mvppro.voice.tts
 
 import android.content.Context
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import java.util.Locale
 
@@ -20,6 +21,27 @@ class TtsManager(context: Context) {
                 }
             }
         }
+    }
+
+    fun setProgressListener(
+        onStartCallback: () -> Unit,
+        onDoneCallback: () -> Unit,
+        onErrorCallback: () -> Unit
+    ) {
+        tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {
+                onStartCallback()
+            }
+
+            override fun onDone(utteranceId: String?) {
+                onDoneCallback()
+            }
+
+            @Deprecated("Deprecated in Java")
+            override fun onError(utteranceId: String?) {
+                onErrorCallback()
+            }
+        })
     }
 
     fun speak(text: String, flush: Boolean = true) {

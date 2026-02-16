@@ -1,6 +1,8 @@
 package com.medix.mvppro.presentation.viewmodel
 
 import android.app.Application
+import android.os.Handler
+import android.os.Looper
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.medix.mvppro.core.logging.MetricsLogger
@@ -40,12 +42,33 @@ class MedixViewModel(application: Application) : AndroidViewModel(application) {
     private val ttsManager = TtsManager(application.applicationContext)
 
     private val _viewData = MutableStateFlow(MedixViewData())
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var keepMicAlwaysOn = false
+    private var ttsPlaying = false
     val viewData: StateFlow<MedixViewData> = _viewData.asStateFlow()
 
     init {
         logger.sessionStarted()
         refreshAppointments()
         observeAsr()
+        ttsManager.setProgressListener(
+            onStartCallback = {
+                ttsPlaying = true
+                speechRecognizerManager.stopListening()
+            },
+            onDoneCallback = {
+                ttsPlaying = false
+                if (keepMicAlwaysOn) {
+                    mainHandler.post { startListeningInternal() }
+                }
+            },
+            onErrorCallback = {
+                ttsPlaying = false
+                if (keepMicAlwaysOn) {
+                    mainHandler.post { startListeningInternal() }
+                }
+            }
+        )
     }
 
     fun onPermissionResult(granted: Boolean) {
@@ -63,6 +86,12 @@ class MedixViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startListening() {
+        keepMicAlwaysOn = true
+        startListeningInternal()
+    }
+
+    private fun startListeningInternal() {
+        if (ttsPlaying) return
         logger.listeningStarted()
         _viewData.value = _viewData.value.copy(
             uiState = MedixUiState.Listening(message = "Habla cuando quieras"),
@@ -73,6 +102,7 @@ class MedixViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun stopListening() {
+        keepMicAlwaysOn = false
         logger.listeningStopped()
         speechRecognizerManager.stopListening()
         _viewData.value = _viewData.value.copy(uiState = MedixUiState.Idle)
@@ -125,6 +155,9 @@ class MedixViewModel(application: Application) : AndroidViewModel(application) {
                                 suggestion = event.asrError.suggestion
                             )
                         )
+                        if (keepMicAlwaysOn && !ttsPlaying) {
+                            mainHandler.postDelayed({ startListeningInternal() }, 500L)
+                        }
                     }
                 }
                 updateMetrics()
@@ -137,6 +170,7 @@ class MedixViewModel(application: Application) : AndroidViewModel(application) {
         val result = handleVoiceCommandUseCase(text)
         logger.intentDetected(result.intent.name)
         logger.actionExecuted(result.intent.name, result.actionSuccess && result.intent != MedixIntent.DESCONOCIDA)
+        speechRecognizerManager.stopListening()
         ttsManager.speak(result.responseText)
         logger.ttsSpoken(result.responseText.length)
         refreshAppointments()

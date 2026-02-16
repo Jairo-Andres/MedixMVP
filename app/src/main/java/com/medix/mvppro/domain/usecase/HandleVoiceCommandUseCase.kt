@@ -18,10 +18,10 @@ class HandleVoiceCommandUseCase(
     operator fun invoke(text: String): VoiceCommandResult {
         val intent = detectIntentUseCase(text)
         val response = when (intent) {
-            MedixIntent.AGENDAR -> proposeNextUseCase()
+            MedixIntent.AGENDAR -> proposeNextUseCase(text)
             MedixIntent.CONFIRMAR -> confirmPendingUseCase()
             MedixIntent.CANCELAR -> cancelLastUseCase()
-            MedixIntent.REPROGRAMAR -> rescheduleUseCase()
+            MedixIntent.REPROGRAMAR -> rescheduleUseCase(text)
             MedixIntent.AYUDA -> "Puedes decir: agendar cita, confirmar, cancelar o reprogramar."
             MedixIntent.DESCONOCIDA -> "No te entendí bien. Di ayuda para escuchar opciones."
         }

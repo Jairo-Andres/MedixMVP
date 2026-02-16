@@ -2,6 +2,7 @@ package com.medix.mvppro.data.datasource
 
 import com.medix.mvppro.data.model.AppointmentEntity
 import com.medix.mvppro.domain.model.AppointmentStatus
+import com.medix.mvppro.domain.usecase.normalizeText
 
 class FakeAppointmentDataSource {
     private val available = mutableListOf(
@@ -21,9 +22,10 @@ class FakeAppointmentDataSource {
     fun getAvailable(): List<AppointmentEntity> = available.toList()
     fun getBooked(): List<AppointmentEntity> = booked.toList()
 
-    fun proposeNext(): String {
+    fun proposeNext(userRequest: String): String {
         if (pendingBook != null) return "Ya hay una cita pendiente por confirmar."
-        val candidate = available.firstOrNull() ?: return "No hay citas disponibles por ahora."
+        val candidate = selectSlot(available, userRequest)
+            ?: return "No encontré ese horario. Prueba diciendo una fecha u hora disponible."
         pendingBook = candidate.copy(status = AppointmentStatus.PENDING_BOOK)
         return "Te propongo ${candidate.dateLabel} a las ${candidate.timeLabel}. Di confirmar para agendar."
     }
@@ -59,11 +61,47 @@ class FakeAppointmentDataSource {
         return "Se canceló tu última cita de ${last.dateLabel} a las ${last.timeLabel}."
     }
 
-    fun reschedule(): String {
+    fun reschedule(userRequest: String): String {
         val current = booked.lastOrNull() ?: return "No tienes una cita confirmada para reprogramar."
-        val next = available.firstOrNull() ?: return "No hay horarios disponibles para reprogramar."
+        val next = selectSlot(available, userRequest)
+            ?: return "No encontré ese horario para reprogramar. Intenta con otra fecha u hora disponible."
         pendingRescheduleCurrent = current.copy(status = AppointmentStatus.PENDING_RESCHEDULE)
         pendingRescheduleNew = next.copy(status = AppointmentStatus.PENDING_RESCHEDULE)
         return "Puedo mover tu cita a ${next.dateLabel} a las ${next.timeLabel}. Di confirmar para aplicar el cambio."
+    }
+
+    private fun selectSlot(slots: List<AppointmentEntity>, userRequest: String): AppointmentEntity? {
+        val request = normalizeText(userRequest)
+        if (request.isBlank()) return slots.firstOrNull()
+
+        val ordinalIndex = when {
+            request.contains("segunda") || request.contains("segundo") || Regex("\\b2\\b").containsMatchIn(request) -> 1
+            request.contains("tercera") || request.contains("tercero") || Regex("\\b3\\b").containsMatchIn(request) -> 2
+            request.contains("cuarta") || request.contains("cuarto") || Regex("\\b4\\b").containsMatchIn(request) -> 3
+            else -> null
+        }
+
+        val withScore = slots.map { slot ->
+            val normalizedDate = normalizeText(slot.dateLabel)
+            val normalizedTime = normalizeText(slot.timeLabel)
+            var score = 0
+            if (request.contains(normalizedDate)) score += 4
+            if (request.contains(normalizedTime)) score += 4
+            if (request.contains(slot.timeLabel.substringBefore(':'))) score += 2
+            if (request.contains(normalizedDate.substringBefore(' '))) score += 1
+            if (request.contains(slot.dateLabel.filter { it.isDigit() })) score += 2
+            slot to score
+        }
+
+        val topScore = withScore.maxOfOrNull { it.second } ?: 0
+        if (topScore > 0) {
+            return withScore.first { it.second == topScore }.first
+        }
+
+        if (ordinalIndex != null) {
+            return slots.getOrNull(ordinalIndex)
+        }
+
+        return slots.firstOrNull()
     }
 }

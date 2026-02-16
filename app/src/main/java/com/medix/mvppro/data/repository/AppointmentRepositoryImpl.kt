@@ -13,11 +13,11 @@ class AppointmentRepositoryImpl(
         booked = dataSource.getBooked().map(AppointmentMapper::toDomain)
     )
 
-    override fun proposeNext(): String = dataSource.proposeNext()
+    override fun proposeNext(userRequest: String): String = dataSource.proposeNext(userRequest)
 
     override fun confirmPending(): String = dataSource.confirmPending()
 
     override fun cancelLast(): String = dataSource.cancelLast()
 
-    override fun reschedule(): String = dataSource.reschedule()
+    override fun reschedule(userRequest: String): String = dataSource.reschedule(userRequest)
 }
