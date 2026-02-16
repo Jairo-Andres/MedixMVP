@@ -2,6 +2,7 @@ package com.example.medixmvp.voice
 
 import android.content.Context
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 
 class VoiceInteractor(
@@ -11,6 +12,7 @@ class VoiceInteractor(
 
     private var textToSpeech: TextToSpeech? = TextToSpeech(context.applicationContext, this)
     private var isReady = false
+    private var onSpeechCompleted: (() -> Unit)? = null
 
     override fun onInit(status: Int) {
         isReady = status == TextToSpeech.SUCCESS
@@ -18,6 +20,21 @@ class VoiceInteractor(
 
         textToSpeech?.language = defaultLocale
         textToSpeech?.setSpeechRate(0.95f)
+        textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) = Unit
+
+            override fun onDone(utteranceId: String?) {
+                onSpeechCompleted?.invoke()
+            }
+
+            override fun onError(utteranceId: String?) {
+                onSpeechCompleted?.invoke()
+            }
+        })
+    }
+
+    fun setOnSpeechCompletedListener(listener: (() -> Unit)?) {
+        onSpeechCompleted = listener
     }
 
     fun speak(text: String) {
