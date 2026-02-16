@@ -1,0 +1,10 @@
+2026-02-20|08:00|Dra. Paula Gómez|Sede Centro - Consultorio 3
+2026-02-20|09:00|Dr. Ricardo León|Sede Centro - Consultorio 5
+2026-02-20|10:00|Dra. Ana Ruiz|Sede Norte - Consultorio 1
+2026-02-20|11:30|Dr. Carlos Peña|Sede Norte - Consultorio 2
+2026-02-21|08:30|Dra. Marta Salazar|Sede Sur - Consultorio 4
+2026-02-21|09:30|Dr. Juan Herrera|Sede Sur - Consultorio 6
+2026-02-22|10:00|Dra. Laura Cifuentes|Sede Centro - Consultorio 2
+2026-02-22|14:00|Dr. Andrés Pardo|Sede Centro - Consultorio 8
+2026-02-23|09:00|Dra. Elisa Moreno|Sede Norte - Consultorio 7
+2026-02-23|15:30|Dr. Felipe Torres|Sede Norte - Consultorio 9
