@@ -11,7 +11,8 @@ import kotlinx.coroutines.flow.asStateFlow
 
 data class MedixUiState(
     val recognizedText: String = "",
-    val responseText: String = "Bienvenido a Medix. Presione hablar para comenzar.",
+    val responseText: String = "Bienvenido a Medix. Para continuar, por favor ingrese su cédula.",
+    val patientId: String = "",
     val availableSlots: List<String> = emptyList(),
     val scheduledAppointments: List<String> = emptyList(),
     val pendingConfirm: Boolean = false
@@ -28,11 +29,25 @@ class MedixViewModel(
         refreshUi()
     }
 
+    fun onPatientIdChange(value: String) {
+        val sanitized = value.filter { it.isDigit() }
+        _uiState.value = _uiState.value.copy(patientId = sanitized)
+    }
+
     fun onSpeechRecognized(text: String) {
+        val currentPatientId = _uiState.value.patientId
+        if (currentPatientId.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                recognizedText = text,
+                responseText = "Antes de gestionar citas, necesito su cédula para guardar la información del usuario."
+            )
+            return
+        }
+
         val intent = IntentProcessor.parse(text)
         val response = when (intent) {
             MedixIntent.AGENDAR -> handleSchedule()
-            MedixIntent.CONFIRMAR -> handleConfirm()
+            MedixIntent.CONFIRMAR -> handleConfirm(currentPatientId)
             MedixIntent.CANCELAR -> handleCancel()
             MedixIntent.REPROGRAMAR -> handleReschedule()
             MedixIntent.DESCONOCIDA -> HELP_TEXT
@@ -54,11 +69,11 @@ class MedixViewModel(
         }
     }
 
-    private fun handleConfirm(): String {
-        return when (val result = repository.confirmPending()) {
+    private fun handleConfirm(patientId: String): String {
+        return when (val result = repository.confirmPending(patientId)) {
             ConfirmResult.NoPending -> "No tengo una cita pendiente por confirmar."
-            is ConfirmResult.Confirmed -> "Cita confirmada para el ${result.appointment.slot.date} a las ${result.appointment.slot.time}."
-            is ConfirmResult.Rescheduled -> "Cita reprogramada y confirmada para el ${result.appointment.slot.date} a las ${result.appointment.slot.time}."
+            is ConfirmResult.Confirmed -> "Cita confirmada para el ${result.appointment.slot.date} a las ${result.appointment.slot.time} (cédula: ${result.appointment.patientId})."
+            is ConfirmResult.Rescheduled -> "Cita reprogramada y confirmada para el ${result.appointment.slot.date} a las ${result.appointment.slot.time} (cédula: ${result.appointment.patientId})."
         }
     }
 
@@ -67,7 +82,7 @@ class MedixViewModel(
         return if (canceled == null) {
             "No tiene citas agendadas para cancelar."
         } else {
-            "Se canceló su cita del ${canceled.slot.date} a las ${canceled.slot.time}."
+            "Se canceló su cita del ${canceled.slot.date} a las ${canceled.slot.time} (cédula: ${canceled.patientId})."
         }
     }
 
@@ -89,7 +104,9 @@ class MedixViewModel(
         val previous = _uiState.value
         val next = previous.copy(
             availableSlots = repository.getAvailableSlots().map { "${it.date} - ${it.time}" },
-            scheduledAppointments = repository.getScheduledAppointments().map { "${it.slot.date} - ${it.slot.time}" },
+            scheduledAppointments = repository.getScheduledAppointments().map {
+                "${it.slot.date} - ${it.slot.time} (C.C.: ${it.patientId})"
+            },
             pendingConfirm = repository.hasPendingConfirmation()
         )
         _uiState.value = if (keepResponse) next.copy(responseText = previous.responseText) else next

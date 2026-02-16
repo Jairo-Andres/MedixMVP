@@ -42,7 +42,7 @@ class FakeAppointmentRepository {
         return nextSlot
     }
 
-    fun confirmPending(): ConfirmResult {
+    fun confirmPending(patientId: String): ConfirmResult {
         return when (val action = pendingAction) {
             null -> ConfirmResult.NoPending
             is PendingAction.Schedule -> {
@@ -50,7 +50,11 @@ class FakeAppointmentRepository {
                     pendingAction = null
                     ConfirmResult.NoPending
                 } else {
-                    val appointment = Appointment(id = idCounter++, slot = action.slot)
+                    val appointment = Appointment(
+                        id = idCounter++,
+                        patientId = patientId,
+                        slot = action.slot
+                    )
                     scheduledAppointments.add(appointment)
                     pendingAction = null
                     ConfirmResult.Confirmed(appointment)
@@ -66,7 +70,11 @@ class FakeAppointmentRepository {
                     availableSlots.add(action.originalAppointment.slot)
                     availableSlots.sortBy { "${it.date} ${it.time}" }
 
-                    val updated = Appointment(id = action.originalAppointment.id, slot = action.newSlot)
+                    val updated = Appointment(
+                        id = action.originalAppointment.id,
+                        patientId = action.originalAppointment.patientId,
+                        slot = action.newSlot
+                    )
                     scheduledAppointments.add(updated)
                     pendingAction = null
                     ConfirmResult.Rescheduled(updated)
