@@ -1,17 +1,15 @@
-package com.example.medixmvp
+package com.medix.mvp
 
+import com.medix.mvp.core.time.DefaultTimeProvider
+import com.medix.mvp.domain.usecase.ParseEntitiesUseCase
+import org.junit.Assert.assertNotNull
 import org.junit.Test
 
-import org.junit.Assert.*
-
-/**
- * Example local unit test, which will execute on the development machine (host).
- *
- * See [testing documentation](http://d.android.com/tools/testing).
- */
 class ExampleUnitTest {
     @Test
-    fun addition_isCorrect() {
-        assertEquals(4, 2 + 2)
+    fun parseDateEntity() {
+        val parser = ParseEntitiesUseCase(DefaultTimeProvider())
+        val entities = parser.execute("cita para 16 de febrero")
+        assertNotNull(entities.fecha)
     }
 }
