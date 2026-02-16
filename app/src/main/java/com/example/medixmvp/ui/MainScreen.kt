@@ -1,16 +1,11 @@
 package com.example.medixmvp.ui
 
 import android.Manifest
-import android.app.Activity
-import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,12 +13,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,165 +27,120 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.example.medixmvp.viewmodel.MedixUiState
-import java.util.Locale
+import com.example.medixmvp.data.model.Appointment
 
 @Composable
 fun MainScreen(
-    state: MedixUiState,
-    onRecognizedText: (String) -> Unit,
-    onSpeak: (String) -> Unit
+    recognizedText: String,
+    responseText: String,
+    isListening: Boolean,
+    availableAppointments: List<Appointment>,
+    bookedAppointments: List<Appointment>,
+    onStartListening: () -> Unit,
+    onStopListening: () -> Unit
 ) {
     val context = LocalContext.current
-    var permissionMessage by remember { mutableStateOf<String?>(null) }
-    val scrollState = rememberScrollState()
-
-    val speechLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val text = result.data
-                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-                ?.firstOrNull()
-                .orEmpty()
-            if (text.isNotBlank()) {
-                onRecognizedText(text)
-            }
-        }
-    }
+    var permissionMessage by remember { mutableStateOf("") }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            permissionMessage = null
-            launchSpeechRecognition(context, speechLauncher::launch)
+            permissionMessage = ""
+            onStartListening()
         } else {
-            permissionMessage = "Necesito permiso de micrófono para escuchar su solicitud."
+            permissionMessage = "Permiso de micrófono no concedido. No puedo iniciar SpeechRecognizer."
         }
     }
 
-    LaunchedEffect(state.responseText) {
-        if (state.responseText.isNotBlank()) {
-            onSpeak(state.responseText)
-        }
-    }
-
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "Medix (MVP)",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 34.sp
-                )
+                text = "Medix MVP",
+                fontSize = 36.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
             )
 
             Button(
                 onClick = {
+                    if (isListening) {
+                        onStopListening()
+                        return@Button
+                    }
+
                     val hasPermission = ContextCompat.checkSelfPermission(
                         context,
                         Manifest.permission.RECORD_AUDIO
                     ) == PackageManager.PERMISSION_GRANTED
 
                     if (hasPermission) {
-                        launchSpeechRecognition(context, speechLauncher::launch)
+                        onStartListening()
                     } else {
                         permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(64.dp)
+                    .height(56.dp)
             ) {
-                Text(text = "🎙 Hablar", fontSize = 24.sp)
-            }
-
-            permissionMessage?.let {
                 Text(
-                    text = it,
-                    color = MaterialTheme.colorScheme.error,
+                    text = if (isListening) "🛑 Detener" else "🎙 Escuchar",
                     fontSize = 20.sp
                 )
             }
 
-            SectionLabel(title = "Usted dijo:")
-            Text(
-                text = state.recognizedText.ifBlank { "(Esperando su voz...)" },
-                fontSize = 24.sp,
-                lineHeight = 30.sp
-            )
-
-            SectionLabel(title = "Medix responde:")
-            Text(
-                text = state.responseText,
-                fontSize = 24.sp,
-                lineHeight = 30.sp
-            )
-
-            HorizontalDivider()
-            SectionLabel(title = "Citas")
-            Text(text = "Disponibles:", fontWeight = FontWeight.SemiBold, fontSize = 22.sp)
-            if (state.availableSlots.isEmpty()) {
-                Text(text = "- Sin horarios disponibles", fontSize = 20.sp)
-            } else {
-                state.availableSlots.forEach { slot ->
-                    Text(text = "• $slot", fontSize = 20.sp)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(text = "Agendadas:", fontWeight = FontWeight.SemiBold, fontSize = 22.sp)
-            if (state.scheduledAppointments.isEmpty()) {
-                Text(text = "- Sin citas agendadas", fontSize = 20.sp)
-            } else {
-                state.scheduledAppointments.forEach { slot ->
-                    Text(text = "• $slot", fontSize = 20.sp)
-                }
-            }
-
-            if (state.pendingConfirm) {
-                Spacer(modifier = Modifier.height(8.dp))
+            if (permissionMessage.isNotBlank()) {
                 Text(
-                    text = "Tiene una cita pendiente por confirmar.",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Medium
+                    text = permissionMessage,
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 18.sp
                 )
+            }
+
+            Text(text = "Usted dijo:", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                text = if (recognizedText.isBlank()) "(Aún no hay texto reconocido)" else recognizedText,
+                fontSize = 22.sp,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+
+            Text(text = "Medix responde:", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                text = responseText,
+                fontSize = 22.sp,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+
+            Text(text = "Citas disponibles", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            if (availableAppointments.isEmpty()) {
+                Text(text = "Sin horarios disponibles.", fontSize = 18.sp)
+            } else {
+                availableAppointments.forEach { appointment ->
+                    Text(
+                        text = "• ${appointment.fecha} - ${appointment.hora} (${appointment.estado})",
+                        fontSize = 18.sp
+                    )
+                }
+            }
+
+            Text(text = "Citas agendadas", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            if (bookedAppointments.isEmpty()) {
+                Text(text = "Sin citas agendadas.", fontSize = 18.sp)
+            } else {
+                bookedAppointments.forEach { appointment ->
+                    Text(
+                        text = "• ${appointment.fecha} - ${appointment.hora} (${appointment.estado})",
+                        fontSize = 18.sp
+                    )
+                }
             }
         }
     }
-}
-
-@Composable
-private fun SectionLabel(title: String) {
-    Text(
-        text = title,
-        fontWeight = FontWeight.Bold,
-        fontSize = 26.sp
-    )
-}
-
-private fun launchSpeechRecognition(
-    context: Context,
-    onLaunch: (Intent) -> Unit
-) {
-    val localeTag = when {
-        Locale.getAvailableLocales().any { it.toLanguageTag().equals("es-CO", ignoreCase = true) } -> "es-CO"
-        else -> "es-ES"
-    }
-
-    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-        putExtra(RecognizerIntent.EXTRA_LANGUAGE, localeTag)
-        putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, localeTag)
-        putExtra(RecognizerIntent.EXTRA_PROMPT, "Diga su solicitud médica")
-    }
-    onLaunch(intent)
 }

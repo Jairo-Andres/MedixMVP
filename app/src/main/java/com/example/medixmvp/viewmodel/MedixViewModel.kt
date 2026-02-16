@@ -1,102 +1,144 @@
 package com.example.medixmvp.viewmodel
 
-import androidx.lifecycle.ViewModel
-import com.example.medixmvp.data.ConfirmResult
+import android.app.Application
+import android.speech.SpeechRecognizer
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.AndroidViewModel
 import com.example.medixmvp.data.FakeAppointmentRepository
-import com.example.medixmvp.logic.IntentProcessor
+import com.example.medixmvp.data.model.Appointment
 import com.example.medixmvp.logic.MedixIntent
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import com.example.medixmvp.logic.detectIntent
+import com.example.medixmvp.voice.SpeechRecognizerManager
+import com.example.medixmvp.voice.TtsSpeaker
 
-data class MedixUiState(
-    val recognizedText: String = "",
-    val responseText: String = "Bienvenido a Medix. Presione hablar para comenzar.",
-    val availableSlots: List<String> = emptyList(),
-    val scheduledAppointments: List<String> = emptyList(),
-    val pendingConfirm: Boolean = false
-)
+class MedixViewModel(application: Application) : AndroidViewModel(application),
+    SpeechRecognizerManager.Listener {
 
-class MedixViewModel(
-    private val repository: FakeAppointmentRepository = FakeAppointmentRepository()
-) : ViewModel() {
+    private val repository = FakeAppointmentRepository()
+    private val ttsSpeaker = TtsSpeaker(application)
+    private val speechManager = SpeechRecognizerManager(application, this)
 
-    private val _uiState = MutableStateFlow(MedixUiState())
-    val uiState: StateFlow<MedixUiState> = _uiState.asStateFlow()
+    val recognizedText: MutableState<String> = mutableStateOf("")
+    val responseText: MutableState<String> = mutableStateOf(
+        "Bienvenido a Medix MVP. Presione escuchar para gestionar su cita."
+    )
+    val isListening: MutableState<Boolean> = mutableStateOf(false)
+    val availableAppointments: MutableState<List<Appointment>> = mutableStateOf(emptyList())
+    val bookedAppointments: MutableState<List<Appointment>> = mutableStateOf(emptyList())
 
     init {
-        refreshUi()
+        refreshAppointments()
+        ttsSpeaker.speak(responseText.value)
     }
 
-    fun onSpeechRecognized(text: String) {
-        val intent = IntentProcessor.parse(text)
-        val response = when (intent) {
-            MedixIntent.AGENDAR -> handleSchedule()
-            MedixIntent.CONFIRMAR -> handleConfirm()
-            MedixIntent.CANCELAR -> handleCancel()
-            MedixIntent.REPROGRAMAR -> handleReschedule()
-            MedixIntent.DESCONOCIDA -> HELP_TEXT
+    fun startListening() {
+        isListening.value = true
+        speechManager.startListening()
+    }
+
+    fun stopListening() {
+        speechManager.stopListening()
+        isListening.value = false
+    }
+
+    fun processText(text: String) {
+        recognizedText.value = text
+        val intent = detectIntent(text)
+        handleIntent(intent)
+    }
+
+    fun handleIntent(intent: MedixIntent) {
+        val reply = when (intent) {
+            MedixIntent.AGENDAR -> {
+                val pending = repository.proposeNextAvailable()
+                if (pending == null) {
+                    "No tengo horarios disponibles para agendar en este momento."
+                } else {
+                    "Le propongo el ${pending.fecha} a las ${pending.hora}. Diga confirmar para agendar."
+                }
+            }
+
+            MedixIntent.CONFIRMAR -> {
+                val confirmed = repository.confirmPending()
+                if (confirmed == null) {
+                    "No hay una cita pendiente para confirmar."
+                } else {
+                    "Cita confirmada para el ${confirmed.fecha} a las ${confirmed.hora}."
+                }
+            }
+
+            MedixIntent.CANCELAR -> {
+                val canceled = repository.cancelLast()
+                if (canceled == null) {
+                    "No hay citas agendadas para cancelar."
+                } else {
+                    "Su cita del ${canceled.fecha} a las ${canceled.hora} fue cancelada."
+                }
+            }
+
+            MedixIntent.REPROGRAMAR -> {
+                val pending = repository.reschedule()
+                if (pending == null) {
+                    "No pude reprogramar porque no hay citas agendadas o no hay horarios disponibles."
+                } else {
+                    "Reprogramación sugerida para el ${pending.fecha} a las ${pending.hora}. Diga confirmar para aceptar."
+                }
+            }
+
+            MedixIntent.DESCONOCIDA -> {
+                "No entendí su solicitud. Puede decir: agendar, confirmar, cancelar o reprogramar."
+            }
         }
 
-        _uiState.value = _uiState.value.copy(
-            recognizedText = text,
-            responseText = response
-        )
-        refreshUi(keepResponse = true)
+        responseText.value = reply
+        refreshAppointments()
+        ttsSpeaker.speak(reply)
     }
 
-    private fun handleSchedule(): String {
-        val slot = repository.requestSchedule()
-        return if (slot == null) {
-            "En este momento no tengo horarios disponibles para agendar."
+    private fun refreshAppointments() {
+        availableAppointments.value = repository.getAvailable()
+        bookedAppointments.value = repository.getBooked()
+    }
+
+    override fun onReadyForSpeech() {
+        responseText.value = "Le escucho, puede hablar ahora."
+        ttsSpeaker.speak(responseText.value)
+    }
+
+    override fun onBeginningOfSpeech() {
+        responseText.value = "Procesando su solicitud..."
+    }
+
+    override fun onResults(text: String) {
+        isListening.value = false
+        if (text.isBlank()) {
+            responseText.value = "No pude escuchar una frase válida."
+            ttsSpeaker.speak(responseText.value)
         } else {
-            "Tengo disponible el ${slot.date} a las ${slot.time}. ¿Desea confirmar la cita para ${slot.date} a las ${slot.time}?"
+            processText(text)
         }
     }
 
-    private fun handleConfirm(): String {
-        return when (val result = repository.confirmPending()) {
-            ConfirmResult.NoPending -> "No tengo una cita pendiente por confirmar."
-            is ConfirmResult.Confirmed -> "Cita confirmada para el ${result.appointment.slot.date} a las ${result.appointment.slot.time}."
-            is ConfirmResult.Rescheduled -> "Cita reprogramada y confirmada para el ${result.appointment.slot.date} a las ${result.appointment.slot.time}."
+    override fun onError(error: Int) {
+        isListening.value = false
+        val message = when (error) {
+            SpeechRecognizer.ERROR_NETWORK -> "Hay un problema de red. Intente nuevamente."
+            SpeechRecognizer.ERROR_NO_MATCH -> "No encontré coincidencias en su voz."
+            SpeechRecognizer.ERROR_CLIENT -> "Hubo un problema del cliente de voz."
+            else -> "Ocurrió un error de reconocimiento: $error"
         }
+        responseText.value = message
+        ttsSpeaker.speak(message)
     }
 
-    private fun handleCancel(): String {
-        val canceled = repository.cancelLatest()
-        return if (canceled == null) {
-            "No tiene citas agendadas para cancelar."
-        } else {
-            "Se canceló su cita del ${canceled.slot.date} a las ${canceled.slot.time}."
-        }
+    override fun onEndOfSpeech() {
+        isListening.value = false
     }
 
-    private fun handleReschedule(): String {
-        val hasAnyScheduled = repository.getScheduledAppointments().isNotEmpty()
-        if (!hasAnyScheduled) {
-            return "No tiene citas agendadas para reprogramar."
-        }
-
-        val newSlot = repository.requestReschedule()
-        return if (newSlot == null) {
-            "No hay horarios disponibles para reprogramar su cita."
-        } else {
-            "Puedo mover su cita al ${newSlot.date} a las ${newSlot.time}. ¿Desea confirmar la cita para ${newSlot.date} a las ${newSlot.time}?"
-        }
-    }
-
-    private fun refreshUi(keepResponse: Boolean = false) {
-        val previous = _uiState.value
-        val next = previous.copy(
-            availableSlots = repository.getAvailableSlots().map { "${it.date} - ${it.time}" },
-            scheduledAppointments = repository.getScheduledAppointments().map { "${it.slot.date} - ${it.slot.time}" },
-            pendingConfirm = repository.hasPendingConfirmation()
-        )
-        _uiState.value = if (keepResponse) next.copy(responseText = previous.responseText) else next
-    }
-
-    companion object {
-        private const val HELP_TEXT =
-            "Puedo agendar, confirmar, cancelar o reprogramar una cita. ¿Qué desea hacer?"
+    override fun onCleared() {
+        super.onCleared()
+        speechManager.release()
+        ttsSpeaker.release()
     }
 }

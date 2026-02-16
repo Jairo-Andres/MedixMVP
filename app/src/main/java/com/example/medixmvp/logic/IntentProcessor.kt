@@ -8,22 +8,20 @@ enum class MedixIntent {
     DESCONOCIDA
 }
 
-object IntentProcessor {
-    private val agendarKeywords = listOf("agendar", "programar", "sacar cita", "pedir cita")
-    private val confirmarKeywords = listOf("confirmar", "sí confirmo", "si confirmo", "confirmo")
-    private val cancelarKeywords = listOf("cancelar", "anular")
-    private val reprogramarKeywords = listOf("reprogramar", "cambiar", "mover la cita")
+fun detectIntent(text: String): MedixIntent {
+    val normalized = text.trim().lowercase()
+    if (normalized.isBlank()) return MedixIntent.DESCONOCIDA
 
-    fun parse(text: String): MedixIntent {
-        val normalized = text.trim().lowercase()
-        if (normalized.isBlank()) return MedixIntent.DESCONOCIDA
+    val agendarKeywords = listOf("agendar", "programar", "sacar cita", "pedir cita")
+    val confirmarKeywords = listOf("confirmar", "confirmo", "sí", "si")
+    val cancelarKeywords = listOf("cancelar", "anular")
+    val reprogramarKeywords = listOf("reprogramar", "cambiar", "mover")
 
-        return when {
-            reprogramarKeywords.any { normalized.contains(it) } -> MedixIntent.REPROGRAMAR
-            cancelarKeywords.any { normalized.contains(it) } -> MedixIntent.CANCELAR
-            confirmarKeywords.any { normalized.contains(it) } -> MedixIntent.CONFIRMAR
-            agendarKeywords.any { normalized.contains(it) } -> MedixIntent.AGENDAR
-            else -> MedixIntent.DESCONOCIDA
-        }
+    return when {
+        agendarKeywords.any { normalized.contains(it) } -> MedixIntent.AGENDAR
+        confirmarKeywords.any { normalized == it || normalized.contains("$it ") || normalized.contains(" $it") } -> MedixIntent.CONFIRMAR
+        cancelarKeywords.any { normalized.contains(it) } -> MedixIntent.CANCELAR
+        reprogramarKeywords.any { normalized.contains(it) } -> MedixIntent.REPROGRAMAR
+        else -> MedixIntent.DESCONOCIDA
     }
 }
