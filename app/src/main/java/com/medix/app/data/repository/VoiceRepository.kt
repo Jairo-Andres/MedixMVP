@@ -18,7 +18,7 @@ class VoiceRepository(
 
     suspend fun transcribeAudio(audioFile: File): String {
         val requestBody = audioFile.asRequestBody("audio/mp4".toMediaType())
-        val part = MultipartBody.Part.createFormData("audio", audioFile.name, requestBody)
+        val part = MultipartBody.Part.createFormData("file", audioFile.name, requestBody)
         return apiService.transcribeAudio(part).text
     }
 
@@ -26,7 +26,7 @@ class VoiceRepository(
         return apiService.sendMessage(
             ConversationRequest(
                 text = text,
-                session_id = sessionId,
+                sessionId = sessionId,
             ),
         )
     }

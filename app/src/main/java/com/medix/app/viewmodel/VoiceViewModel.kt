@@ -84,6 +84,10 @@ class VoiceViewModel(
                 val text = repository.transcribeAudio(audioFile)
                 _uiState.update { state -> state.copy(userText = text) }
 
+                if (text.isBlank()) {
+                    throw IllegalArgumentException("El texto transcrito está vacío.")
+                }
+
                 val response = repository.sendConversationMessage(text, _uiState.value.sessionId)
                 response
             }.onSuccess { response ->

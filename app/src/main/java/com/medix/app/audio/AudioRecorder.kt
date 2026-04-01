@@ -1,9 +1,11 @@
 package com.medix.app.audio
 
+import android.annotation.TargetApi
 import android.content.Context
 import android.media.MediaRecorder
 import java.io.File
 
+@TargetApi(31)
 class AudioRecorder(private val context: Context) {
 
     private var recorder: MediaRecorder? = null
